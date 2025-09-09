@@ -1,0 +1,83 @@
+# agentic_ai_assistant.py
+# This is a simple implementation of an agentic AI assistant using LangChain.
+# It demonstrates a long-chain setup with tools, memory, and an LLM agent.
+# Requirements: Install LangChain, OpenAI (or other LLM provider), and necessary tools.
+# pip install langchain langchain-openai langchain-community duckduckgo-search
+
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain.memory import ConversationBufferMemory
+from langchain.tools import tool
+import os
+
+# Set up your OpenAI API key (replace with your actual key)
+os.environ["OPENAI_API_KEY"] = "your_openai_api_key_here"
+
+# Define custom tools
+@tool
+def calculate(expression: str) -> str:
+    """Evaluates a mathematical expression."""
+    try:
+        return str(eval(expression))
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Initialize search tool
+search = DuckDuckGoSearchRun()
+
+# List of tools the agent can use
+tools = [search, calculate]
+
+# Set up the LLM (using GPT-4o-mini for efficiency)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# Define the system prompt for the agent
+system_prompt = """
+You are an intelligent agentic AI assistant capable of performing tasks using tools.
+You have access to the following tools: {tool_names}.
+Use them wisely to answer user queries.
+Always think step-by-step before taking an action.
+"""
+
+# Create the prompt template
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", system_prompt),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ]
+)
+
+# Create the agent
+agent = create_tool_calling_agent(llm, tools, prompt)
+
+# Set up memory for conversation history
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+# Create the agent executor with memory
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    memory=memory,
+    verbose=True,  # Set to False for less output
+    handle_parsing_errors=True
+)
+
+# Function to run the agent
+def run_agent(query: str) -> str:
+    """Run the agent with a user query."""
+    response = agent_executor.invoke({"input": query})
+    return response["output"]
+
+# Example usage
+if __name__ == "__main__":
+    print("Welcome to the Agentic AI Assistant!")
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() in ["exit", "quit"]:
+            break
+        response = run_agent(user_input)
+        print(f"Assistant: {response}")
